@@ -21,6 +21,8 @@ public final class EventStat<T> {
     }
 
     private final T insertAt(T event, long currentStamp) {
+        if (currentStamp < offsetStamp) return null;
+
         rwLock.readLock().lock();
         try {
             lastInsertStamp = currentStamp;
@@ -54,6 +56,8 @@ public final class EventStat<T> {
 
     private final int countInDuration(int durationInSeconds, long currentStamp) {
         int secondsLate = (int) (currentStamp - lastInsertStamp)/1000;
+        if (secondsLate < 0) return -1; //can't read from the past
+
         int result = 0;
         int end = SECONDS_IN_24_HOURS + getPos(currentStamp) + 1;
         int start = end + secondsLate - durationInSeconds;
