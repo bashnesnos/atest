@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.RecursiveAction;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -279,6 +280,38 @@ public class StatTest {
         assertNInLastMinuteAtTimestamp(n, es, finalStamp);
         assertNInLastHourAtTimestamp(n, es, finalStamp);
         assertNInLastDayAtTimestamp(n, es, finalStamp);
+    }
+
+    @Test
+    public void test48hr1TPS() throws IllegalAccessException, InvocationTargetException {
+        final EventStat<Object> es = new EventStat<>();
+        final long offsetStamp = getOffsetStamp(es);
+        int n = EventStat.SECONDS_IN_24_HOURS * 2;
+        long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS * 2;
+
+        for (int i = 1; i <= n; i++) {
+            final long nextStamp = offsetStamp + i*1000;
+            assertNotNull(insertAtStamp(new Object(), es, nextStamp > finalStamp ? finalStamp : nextStamp));
+        }
+
+        assertNInLastMinuteAtTimestamp(EventStat.SECONDS_IN_MINUTE, es, finalStamp);
+        assertNInLastHourAtTimestamp(EventStat.SECONDS_IN_HOUR, es, finalStamp);
+        assertNInLastDayAtTimestamp(EventStat.SECONDS_IN_24_HOURS, es, finalStamp);
+    }
+
+    @Test
+    public void test48hr1TPH() throws IllegalAccessException, InvocationTargetException {
+        final EventStat<Object> es = new EventStat<>();
+        final long offsetStamp = getOffsetStamp(es);
+        int n = 48;
+        long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS * 2;
+
+        for (int i = 0; i <= n; i++) {
+            long nextStamp = offsetStamp + i*EventStat.MILLIS_IN_HOUR;
+            assertNotNull(insertAtStamp(new Object(), es, nextStamp > finalStamp ? finalStamp : nextStamp));
+        }
+
+        assertNInLastDayAtTimestamp(24, es, finalStamp);
     }
 
 
