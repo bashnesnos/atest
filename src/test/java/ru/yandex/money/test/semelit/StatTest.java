@@ -217,6 +217,39 @@ public class StatTest {
     }
 
     @Test
+    public void test10KConcurrentInsertWithLag() throws ExecutionException, InterruptedException {
+        final EventStat<Object> es = new EventStat<>();
+
+        int n = 10_000;
+        List<ForkJoinTask<Void>> taskList = new ArrayList<>();
+        for (int i = 1; i <= n; i++) {
+            taskList.add(new RecursiveAction() {
+                @Override
+                protected void compute() {
+                    es.insert(new Object());
+                }
+            }.fork());
+            if (i % 5001 == 0) { //таким образом ограничеваем кол-во событий
+                while (!taskList.isEmpty()) {
+                    taskList.remove(0).get();
+                }
+                Thread.sleep(2000); //эмулируем лаг
+            }
+
+        }
+
+        while (!taskList.isEmpty()) {
+            taskList.remove(0).get();
+        }
+
+        assertNInLastMinute(n, es);
+        assertNInLastHour(n, es);
+        assertNInLastDay(n, es);
+    }
+
+
+
+    @Test
     public void testConcurrentAtOverflow() throws ExecutionException, InterruptedException, IllegalAccessException, InvocationTargetException {
         final EventStat<Object> es = new EventStat<>();
         final long offsetStamp = getOffsetStamp(es);
