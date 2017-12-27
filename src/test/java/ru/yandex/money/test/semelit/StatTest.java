@@ -91,7 +91,7 @@ public class StatTest {
     @Test
     public void testInsertInThePast() throws InvocationTargetException, IllegalAccessException {
         EventStat<Object> es = new EventStat<>();
-        assertNull("Ожидаем null при попытке вставить событие в прошлом", insertAtStamp(new Object(), es, System.currentTimeMillis() - 60*1000));
+        assertNull("Ожидаем null при попытке вставить событие в прошлом", insertAtStamp(new Object(), es, System.currentTimeMillis() - EventStat.MILLIS_IN_24_HOURS - 60*1000));
     }
 
 
@@ -162,16 +162,16 @@ public class StatTest {
     }
 
     @Test
-    public void testTrivialOverflow() throws InvocationTargetException, IllegalAccessException {
+    public void testTrivialNotInLastDay() throws InvocationTargetException, IllegalAccessException {
         EventStat<Object> es = new EventStat<>();
         es.insert(new Object());
         assertNInLastMinute(1, es);
         assertNInLastHour(1, es);
         assertNInLastDay(1, es);
-        long nextHourStamp = System.currentTimeMillis() + EventStat.SECONDS_IN_24_HOURS * 1000 + EventStat.SECONDS_IN_HOUR * 1000; // 25h
-        assertNInLastMinuteAtTimestamp(0, es, nextHourStamp);
-        assertNInLastHourAtTimestamp(0, es, nextHourStamp);
-        assertNInLastDayAtTimestamp(0, es, nextHourStamp);
+        long nextDayStamp = System.currentTimeMillis() + EventStat.MILLIS_IN_24_HOURS; // ~24h
+        assertNInLastMinuteAtTimestamp(0, es, nextDayStamp);
+        assertNInLastHourAtTimestamp(0, es, nextDayStamp);
+        assertNInLastDayAtTimestamp(0, es, nextDayStamp);
     }
 
     @Test
@@ -181,7 +181,7 @@ public class StatTest {
         assertNInLastMinute(1, es);
         assertNInLastHour(1, es);
         assertNInLastDay(1, es);
-        long nextHourStamp = System.currentTimeMillis() + EventStat.SECONDS_IN_24_HOURS * 1000 + 1000; // 24h 1s
+        long nextHourStamp = System.currentTimeMillis() + EventStat.MILLIS_IN_24_HOURS + 1000; // 24h 1s
         assertNInLastMinuteAtTimestamp(0, es, nextHourStamp);
         assertNInLastHourAtTimestamp(0, es, nextHourStamp);
         assertNInLastDayAtTimestamp(0, es, nextHourStamp);
@@ -216,14 +216,14 @@ public class StatTest {
     }
 
     @Test
-    public void testConcurrentOverflow() throws ExecutionException, InterruptedException, IllegalAccessException, InvocationTargetException {
+    public void testConcurrentAtOverflow() throws ExecutionException, InterruptedException, IllegalAccessException, InvocationTargetException {
         final EventStat<Object> es = new EventStat<>();
         final long offsetStamp = getOffsetStamp(es);
-        int n = 10_000;
-        long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS + n/2 + 1;
+        int n = 5_000;
+        long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS;
         List<ForkJoinTask<Void>> taskList = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            final long nextStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS - n/2 + 1 + i;
+            final long nextStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS - n + i;
             taskList.add(new RecursiveAction() {
                 @Override
                 protected void compute() {
@@ -240,9 +240,45 @@ public class StatTest {
             taskList.remove(0).get();
         }
 
-        assertNInLastMinuteAtTimestamp(n/2, es, finalStamp);
-        assertNInLastHourAtTimestamp(n/2, es, finalStamp);
-        assertNInLastDayAtTimestamp(n/2, es, finalStamp);
+        assertNInLastMinuteAtTimestamp(n, es, finalStamp);
+        assertNInLastHourAtTimestamp(n, es, finalStamp);
+        assertNInLastDayAtTimestamp(n, es, finalStamp);
+
+        assertNInLastMinuteAtTimestamp(n, es, finalStamp + 1);
+        assertNInLastHourAtTimestamp(n, es, finalStamp + 1);
+        assertNInLastDayAtTimestamp(n, es, finalStamp + 1);
+
+    }
+
+
+    @Test
+    public void testConcurrentOverflow() throws ExecutionException, InterruptedException, IllegalAccessException, InvocationTargetException {
+        final EventStat<Object> es = new EventStat<>();
+        final long offsetStamp = getOffsetStamp(es);
+        int n = 10_000;
+        long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS + n/2;
+        List<ForkJoinTask<Void>> taskList = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            final long nextStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS - n/2 + i;
+            taskList.add(new RecursiveAction() {
+                @Override
+                protected void compute() {
+                    try {
+                        insertAtStamp(new Object(), es, nextStamp);
+                    } catch (InvocationTargetException | IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }.fork());
+        }
+
+        while (!taskList.isEmpty()) {
+            taskList.remove(0).get();
+        }
+
+        assertNInLastMinuteAtTimestamp(n, es, finalStamp);
+        assertNInLastHourAtTimestamp(n, es, finalStamp);
+        assertNInLastDayAtTimestamp(n, es, finalStamp);
     }
 
 

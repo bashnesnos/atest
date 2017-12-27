@@ -21,18 +21,15 @@ public final class EventStat<T> {
     }
 
     private final T insertAt(T event, long currentStamp) {
-        if (currentStamp < offsetStamp) return null;
-
         rwLock.readLock().lock();
         try {
-            lastInsertStamp = currentStamp;
-            if (currentStamp - offsetStamp > MILLIS_IN_24_HOURS) {
-                //overflow detected
+            if (currentStamp - lastInsertStamp > MILLIS_IN_24_HOURS) {
+                //stale overflow detected
                 rwLock.readLock().unlock();
                 rwLock.writeLock().lock();
                 try {
                     //flushing
-                    if (currentStamp - offsetStamp > MILLIS_IN_24_HOURS) {
+                    if (currentStamp - lastInsertStamp > MILLIS_IN_24_HOURS) {
                         fullSecondSlots = new AtomicIntegerArray(new int[SECONDS_IN_24_HOURS]);
                         offsetStamp = currentStamp;
                     }
@@ -41,8 +38,10 @@ public final class EventStat<T> {
                     rwLock.writeLock().unlock();
                 }
             }
+            if (currentStamp < lastInsertStamp - MILLIS_IN_24_HOURS) return null; //вставки за границами окна не разрешаем
             int pos = getPos(currentStamp);
             fullSecondSlots.incrementAndGet(pos);
+            lastInsertStamp = currentStamp;
             return event;
         } finally {
             rwLock.readLock().unlock();
@@ -51,7 +50,7 @@ public final class EventStat<T> {
     }
 
     private final int getPos(long currentStamp) {
-        return (int) (currentStamp - offsetStamp)/1000 % SECONDS_IN_24_HOURS;
+        return (int) (SECONDS_IN_24_HOURS + (currentStamp - offsetStamp)/1000) % SECONDS_IN_24_HOURS;
     }
 
     private final int countInDuration(int durationInSeconds, long currentStamp) {
