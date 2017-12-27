@@ -3,50 +3,51 @@ package ru.yandex.money.test.semelit;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
 public final class EventStat<T> {
-    private final static int SECONDS_IN_MINUTE = 60;
-    private final static int SECONDS_IN_HOUR = SECONDS_IN_MINUTE * 60;
-    private final static int SECONDS_IN_24_HOURS = 24 * SECONDS_IN_HOUR;
+    public final static int SECONDS_IN_MINUTE = 60;
+    public final static int SECONDS_IN_HOUR = SECONDS_IN_MINUTE * 60;
+    public final static int SECONDS_IN_24_HOURS = 24 * SECONDS_IN_HOUR;
 
 
     private final AtomicIntegerArray fullSecondSlots = new AtomicIntegerArray(new int[SECONDS_IN_24_HOURS]);
-    private volatile long offsetStamp = System.currentTimeMillis();
+    private final long offsetStamp = System.currentTimeMillis();
+    private volatile long lastInsertStamp = System.currentTimeMillis();
 
     public T insert(T event) {
-        return insertToLastMinute(event);
+        return insertAt(event, System.currentTimeMillis());
     }
 
-    private final T insertToLastMinute(T event) {
-        int pos = getPos();
-        fullSecondSlots.incrementAndGet(pos);
+    private final T insertAt(T event, long currentStamp) {
+        lastInsertStamp = currentStamp;
+        fullSecondSlots.incrementAndGet(getPos(currentStamp));
         return event;
     }
 
-    private final int getPos() {
-        long currentSecond = System.currentTimeMillis();
-        return (int) ((currentSecond - offsetStamp)/1000) % SECONDS_IN_24_HOURS;
+    private final int getPos(long currentStamp) {
+        return (int) (currentStamp - offsetStamp)/1000 % SECONDS_IN_24_HOURS;
     }
 
-    private final int countInDuration(int durationInSeconds) {
+    private final int countInDuration(int durationInSeconds, long currentStamp) {
+        int secondsLate = (int) (currentStamp - lastInsertStamp)/1000;
         int result = 0;
-        for (int i = getPos(); i % SECONDS_IN_24_HOURS < durationInSeconds; i++) {
-            result += fullSecondSlots.get(i);
+        int end = SECONDS_IN_24_HOURS + getPos(currentStamp) + 1;
+        int start = end + secondsLate - durationInSeconds;
+        if (start < end) { //protection from reading stale
+            for (int i = start; i < end; i++) {
+                result += fullSecondSlots.get(i % SECONDS_IN_24_HOURS);
+            }
         }
         return result;
     }
 
     public int countInLastMinute() {
-        return countInDuration(SECONDS_IN_MINUTE);
+        return countInDuration(SECONDS_IN_MINUTE, System.currentTimeMillis());
     }
 
     public int countInLastHour() {
-        return countInDuration(SECONDS_IN_HOUR);
+        return countInDuration(SECONDS_IN_HOUR, System.currentTimeMillis());
     }
 
     public int countInLastDay() {
-        int result = 0;
-        for (int i = 0; i < SECONDS_IN_24_HOURS; i++) {
-            result += fullSecondSlots.get(i);
-        }
-        return result;
+        return countInDuration(SECONDS_IN_24_HOURS, System.currentTimeMillis());
     }
 }
