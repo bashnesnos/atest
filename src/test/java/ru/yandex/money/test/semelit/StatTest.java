@@ -223,7 +223,7 @@ public class StatTest {
         int n = 5_000;
         long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS;
         List<ForkJoinTask<Void>> taskList = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
+        for (int i = 1; i <= n; i++) {
             final long nextStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS - n + i;
             taskList.add(new RecursiveAction() {
                 @Override
@@ -235,6 +235,12 @@ public class StatTest {
                     }
                 }
             }.fork());
+            if (i % 500 == 0) { //таким образом ограничеваем поступление событий в "будущем" до 500мс
+                while (!taskList.isEmpty()) {
+                    taskList.remove(0).get();
+                }
+            }
+
         }
 
         while (!taskList.isEmpty()) {
@@ -259,7 +265,7 @@ public class StatTest {
         int n = 10_000;
         long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS + n/2;
         List<ForkJoinTask<Void>> taskList = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
+        for (int i = 1; i <= n; i++) {
             final long nextStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS - n/2 + i;
             taskList.add(new RecursiveAction() {
                 @Override
@@ -271,11 +277,13 @@ public class StatTest {
                     }
                 }
             }.fork());
+            if (i % 500 == 0) { //таким образом ограничеваем поступление событий в "будущем" до 500мс
+                while (!taskList.isEmpty()) {
+                    taskList.remove(0).get();
+                }
+            }
         }
 
-        while (!taskList.isEmpty()) {
-            taskList.remove(0).get();
-        }
 
         assertNInLastMinuteAtTimestamp(n, es, finalStamp);
         assertNInLastHourAtTimestamp(n, es, finalStamp);
