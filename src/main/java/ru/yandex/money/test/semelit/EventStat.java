@@ -1,25 +1,51 @@
 package ru.yandex.money.test.semelit;
 
 import java.util.concurrent.atomic.AtomicIntegerArray;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public final class EventStat<T> {
     public final static int SECONDS_IN_MINUTE = 60;
     public final static int SECONDS_IN_HOUR = SECONDS_IN_MINUTE * 60;
     public final static int SECONDS_IN_24_HOURS = 24 * SECONDS_IN_HOUR;
+    public final static long MILLIS_IN_24_HOURS = SECONDS_IN_24_HOURS * 1000;
 
+    private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
 
-    private final AtomicIntegerArray fullSecondSlots = new AtomicIntegerArray(new int[SECONDS_IN_24_HOURS]);
-    private final long offsetStamp = System.currentTimeMillis();
-    private volatile long lastInsertStamp = System.currentTimeMillis();
+    private AtomicIntegerArray fullSecondSlots = new AtomicIntegerArray(new int[SECONDS_IN_24_HOURS]);
+    private volatile long offsetStamp = System.currentTimeMillis();
+    private volatile long lastInsertStamp = offsetStamp;
 
     public T insert(T event) {
         return insertAt(event, System.currentTimeMillis());
     }
 
     private final T insertAt(T event, long currentStamp) {
-        lastInsertStamp = currentStamp;
-        fullSecondSlots.incrementAndGet(getPos(currentStamp));
-        return event;
+        rwLock.readLock().lock();
+        try {
+            lastInsertStamp = currentStamp;
+            if (currentStamp - offsetStamp > MILLIS_IN_24_HOURS) {
+                //overflow detected
+                rwLock.readLock().unlock();
+                rwLock.writeLock().lock();
+                try {
+                    //flushing
+                    if (currentStamp - offsetStamp > MILLIS_IN_24_HOURS) {
+                        fullSecondSlots = new AtomicIntegerArray(new int[SECONDS_IN_24_HOURS]);
+                        offsetStamp = currentStamp;
+                    }
+                    rwLock.readLock().lock();
+                } finally {
+                    rwLock.writeLock().unlock();
+                }
+            }
+            int pos = getPos(currentStamp);
+            fullSecondSlots.incrementAndGet(pos);
+            return event;
+        } finally {
+            rwLock.readLock().unlock();
+        }
+
     }
 
     private final int getPos(long currentStamp) {
