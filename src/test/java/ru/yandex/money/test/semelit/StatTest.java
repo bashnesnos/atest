@@ -436,5 +436,43 @@ public class StatTest {
         assertNInLastDayAtTimestamp(n, es, finalStamp);
     }
 
+    @Test
+    public void test48hr2TPD() throws IllegalAccessException, InvocationTargetException, ExecutionException, InterruptedException {
+        final EventStat<Object> es = new EventStat<>();
+        final long offsetStamp = getOffsetStamp(es);
+        int n = 2;
+        long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS * 2;
+        List<ForkJoinTask<Void>> taskList = new ArrayList<>();
+
+        for (int i = 0; i <= n; i++) {
+            final long nextStamp = offsetStamp + i*EventStat.MILLIS_IN_24_HOURS;
+            taskList.add(new RecursiveAction() {
+                @Override
+                protected void compute() {
+                    try {
+                        insertAtStamp(new Object(), es, nextStamp > finalStamp ? finalStamp : nextStamp);
+                    } catch (InvocationTargetException | IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }.fork());
+            taskList.add(new RecursiveAction() {
+                @Override
+                protected void compute() {
+                    try {
+                        insertAtStamp(new Object(), es, nextStamp > finalStamp ? finalStamp : nextStamp);
+                    } catch (InvocationTargetException | IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }.fork());
+
+            while (!taskList.isEmpty()) {
+                taskList.remove(0).get();
+            }
+        }
+
+        assertNInLastDayAtTimestamp(n, es, finalStamp);
+    }
 
 }

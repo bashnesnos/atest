@@ -68,6 +68,8 @@ public final class EventStat<T> {
                         //в случае такого простоя проще создать новый массив
                         fullSecondSlots = new AtomicIntegerArray(new int[SLOTS]);
                     } else if (lag > 1000) {
+                        //это означает, что мы ничего не вставляли, а соответственно и не очищали слоты
+                        //поэтому включаем в очистку текущую позицию, чтобы не дописывать в устаревшие данные
                         int end = SLOTS + pos + 1;
                         int start = end - ((int) (lag/1000));
                         for (int i = start; i < end; i++) {
