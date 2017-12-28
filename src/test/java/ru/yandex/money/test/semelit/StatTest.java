@@ -233,7 +233,7 @@ public class StatTest {
                 while (!taskList.isEmpty()) {
                     taskList.remove(0).get();
                 }
-                Thread.sleep(2000); //эмулируем лаг
+                Thread.sleep(1990); //эмулируем лаг на точке пересечения секунд
             }
 
         }
@@ -341,6 +341,48 @@ public class StatTest {
     }
 
     @Test
+    public void test48hr2TPS() throws IllegalAccessException, InvocationTargetException, ExecutionException, InterruptedException {
+        final EventStat<Object> es = new EventStat<>();
+        final long offsetStamp = getOffsetStamp(es);
+        int n = EventStat.SECONDS_IN_24_HOURS * 2;
+        long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS * 2;
+        List<ForkJoinTask<Void>> taskList = new ArrayList<>();
+        for (int i = 0; i <= n; i++) {
+            final long nextStamp = offsetStamp + i*1000;
+            taskList.add(new RecursiveAction() {
+                @Override
+                protected void compute() {
+                    try {
+                        insertAtStamp(new Object(), es, nextStamp > finalStamp ? finalStamp : nextStamp);
+                    } catch (InvocationTargetException | IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }.fork());
+            taskList.add(new RecursiveAction() {
+                @Override
+                protected void compute() {
+                    try {
+                        insertAtStamp(new Object(), es, nextStamp > finalStamp ? finalStamp : nextStamp);
+                    } catch (InvocationTargetException | IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }.fork());
+
+            while (!taskList.isEmpty()) {
+                taskList.remove(0).get();
+            }
+        }
+
+        assertTrue(taskList.isEmpty());
+        assertNInLastMinuteAtTimestamp(EventStat.SECONDS_IN_MINUTE*2, es, finalStamp);
+        assertNInLastHourAtTimestamp(EventStat.SECONDS_IN_HOUR*2, es, finalStamp);
+        assertNInLastDayAtTimestamp(n, es, finalStamp);
+    }
+
+
+    @Test
     public void test48hr1TPH() throws IllegalAccessException, InvocationTargetException {
         final EventStat<Object> es = new EventStat<>();
         final long offsetStamp = getOffsetStamp(es);
@@ -352,7 +394,46 @@ public class StatTest {
             assertNotNull(insertAtStamp(new Object(), es, nextStamp > finalStamp ? finalStamp : nextStamp));
         }
 
-        assertNInLastDayAtTimestamp(24, es, finalStamp);
+        assertNInLastDayAtTimestamp(n/2, es, finalStamp);
+    }
+
+    @Test
+    public void test48hr2TPH() throws IllegalAccessException, InvocationTargetException, ExecutionException, InterruptedException {
+        final EventStat<Object> es = new EventStat<>();
+        final long offsetStamp = getOffsetStamp(es);
+        int n = 48*2;
+        long finalStamp = offsetStamp + EventStat.MILLIS_IN_24_HOURS * 2;
+        List<ForkJoinTask<Void>> taskList = new ArrayList<>();
+
+        for (int i = 0; i <= n; i++) {
+            final long nextStamp = offsetStamp + i*EventStat.MILLIS_IN_HOUR/2;
+            taskList.add(new RecursiveAction() {
+                @Override
+                protected void compute() {
+                    try {
+                        insertAtStamp(new Object(), es, nextStamp > finalStamp ? finalStamp : nextStamp);
+                    } catch (InvocationTargetException | IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }.fork());
+            taskList.add(new RecursiveAction() {
+                @Override
+                protected void compute() {
+                    try {
+                        insertAtStamp(new Object(), es, nextStamp > finalStamp ? finalStamp : nextStamp);
+                    } catch (InvocationTargetException | IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }.fork());
+
+            while (!taskList.isEmpty()) {
+                taskList.remove(0).get();
+            }
+        }
+
+        assertNInLastDayAtTimestamp(n, es, finalStamp);
     }
 
 
