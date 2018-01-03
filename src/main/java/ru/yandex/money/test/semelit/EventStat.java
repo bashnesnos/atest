@@ -75,8 +75,9 @@ public final class EventStat<T> {
                         for (int i = start; i < end; i++) {
                             fullSecondSlots.set(i % SLOTS, 0);
                         }
+                        clearMark.set(pos); //необходимо установить в текущую позицию, иначе неравномерный лаг может сбить очистку
                     }
-                    lastInsertStamp = currentStamp;
+                    lastInsertStamp = currentStamp; //таким образом отмечаем для ожидающих write lock, что очистка выполнена
                     rwLock.readLock().lock();
                 } finally {
                     rwLock.writeLock().unlock();
