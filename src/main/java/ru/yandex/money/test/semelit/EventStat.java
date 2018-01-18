@@ -46,11 +46,12 @@ public final class EventStat<T> {
 
     private volatile long lastInsertStamp = offsetStamp;
 
-    public T insert(T event) {
+    public boolean insert(T event) {
         return insertAt(event, System.currentTimeMillis());
     }
 
-    private final T insertAt(T event, long currentStamp) {
+    private final boolean insertAt(T event, long currentStamp) {
+        if (currentStamp < lastInsertStamp - MILLIS_IN_24_HOURS) return false; //вставки за границами окна не разрешаем
         rwLock.readLock().lock();
         try {
             final int pos = getPos(currentStamp);
@@ -83,14 +84,13 @@ public final class EventStat<T> {
                     rwLock.writeLock().unlock();
                 }
             }
-            if (currentStamp < lastInsertStamp - MILLIS_IN_24_HOURS) return null; //вставки за границами окна не разрешаем
             if (clearMark.compareAndSet(pos, (pos + 1) % SLOTS)) {
                 //для равномерной нагрузки очистка происходит в момент переключения текущего слота
                 fullSecondSlots.set(clearMark.get(), 0); //основываясь на предположении, что в будущем в пределах одной секунды никто не добавляет события
             }
             fullSecondSlots.incrementAndGet(pos);
             lastInsertStamp = currentStamp;
-            return event;
+            return true;
         } finally {
             rwLock.readLock().unlock();
         }

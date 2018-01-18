@@ -13,9 +13,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.RecursiveAction;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class StatTest {
 
@@ -73,8 +71,8 @@ public class StatTest {
         assertTrue("Ожидаем " + n + " за последний день, но " + countInLastDay, countInLastDay == n);
     }
 
-    private static <T> Object insertAtStamp(T event, EventStat<T> es, long timestamp) throws InvocationTargetException, IllegalAccessException {
-        return insertAtMethod.invoke(es, event, timestamp);
+    private static <T> boolean insertAtStamp(T event, EventStat<T> es, long timestamp) throws InvocationTargetException, IllegalAccessException {
+        return (Boolean) insertAtMethod.invoke(es, event, timestamp);
     }
 
     private static long getOffsetStamp(EventStat<?> es) throws IllegalAccessException {
@@ -85,14 +83,13 @@ public class StatTest {
     public void testTrivialInsert() {
         EventStat<Object> es = new EventStat<>();
         Object event = new Object();
-        Object insertedEvent = es.insert(event);
-        assertTrue("Ожидаем то же событие после вставки, но " + insertedEvent, event == insertedEvent);
+        assertTrue(es.insert(event));
     }
 
     @Test
     public void testInsertInThePast() throws InvocationTargetException, IllegalAccessException {
         EventStat<Object> es = new EventStat<>();
-        assertNull("Ожидаем null при попытке вставить событие в прошлом", insertAtStamp(new Object(), es, System.currentTimeMillis() - EventStat.MILLIS_IN_24_HOURS - 60*1000));
+        assertFalse("Ожидаем false при попытке вставить событие в прошлом", insertAtStamp(new Object(), es, System.currentTimeMillis() - EventStat.MILLIS_IN_24_HOURS - 60*1000));
     }
 
 
